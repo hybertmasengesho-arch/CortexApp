@@ -15,9 +15,41 @@ android {
         versionName = "1.0"
     }
 
+    // Reads signing credentials from environment variables — NEVER
+    // hardcoded here, since this file is committed to git. The GitHub
+    // Actions workflow (.github/workflows/build-apk.yml) sets these from
+    // repo secrets before building. For a local build in Android Studio,
+    // set them as environment variables on your own machine, or the
+    // release build simply falls back to being unsigned (installable for
+    // testing, but not swappable with a properly-signed version later —
+    // see README.md's "Release builds" section).
+    val ksPath = System.getenv("CORTEX_KEYSTORE_PATH")
+    val ksPass = System.getenv("CORTEX_KEYSTORE_PASSWORD")
+    val keyAliasEnv = System.getenv("CORTEX_KEY_ALIAS")
+    val keyPass = System.getenv("CORTEX_KEY_PASSWORD")
+    val hasSigningConfig = !ksPath.isNullOrBlank() && file(ksPath).exists() &&
+        !ksPass.isNullOrBlank() && !keyAliasEnv.isNullOrBlank() && !keyPass.isNullOrBlank()
+
+    signingConfigs {
+        if (hasSigningConfig) {
+            create("release") {
+                storeFile = file(ksPath!!)
+                storePassword = ksPass
+                keyAlias = keyAliasEnv
+                keyPassword = keyPass
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (hasSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            // else: unsigned release build — Android will still let you
+            // install it for testing, just won't treat it as an "update"
+            // to a previously signed version.
         }
     }
     compileOptions {

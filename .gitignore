@@ -8,3 +8,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Signing key material — must never be committed, lives as GitHub Secrets instead
+cortex-release.keystore
+cortex-release.keystore.base64
+keystore-credentials.txt

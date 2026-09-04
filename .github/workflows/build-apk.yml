@@ -7,6 +7,12 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+# The release-publishing step below needs permission to create/update
+# releases on this repo — the default token is read-only unless this is
+# set explicitly.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,11 +35,49 @@ jobs:
         with:
           gradle-version: '8.4'
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon --stacktrace
+      # Decodes the base64-encoded keystore secret back into a real
+      # .keystore file, only inside this CI run — never committed to git.
+      # If these secrets aren't set (e.g. a fork without them), this step
+      # still succeeds but produces an empty/invalid file, and
+      # build.gradle.kts detects that and falls back to an unsigned build.
+      - name: Decode signing keystore
+        env:
+          CORTEX_KEYSTORE_BASE64: ${{ secrets.CORTEX_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$CORTEX_KEYSTORE_BASE64" ]; then
+            echo "$CORTEX_KEYSTORE_BASE64" | base64 -d > cortex-release.keystore
+            echo "Keystore decoded."
+          else
+            echo "No CORTEX_KEYSTORE_BASE64 secret set — release build will be unsigned."
+          fi
 
-      - name: Upload APK
+      - name: Build signed release APK
+        env:
+          CORTEX_KEYSTORE_PATH: ${{ github.workspace }}/cortex-release.keystore
+          CORTEX_KEYSTORE_PASSWORD: ${{ secrets.CORTEX_KEYSTORE_PASSWORD }}
+          CORTEX_KEY_ALIAS: ${{ secrets.CORTEX_KEY_ALIAS }}
+          CORTEX_KEY_PASSWORD: ${{ secrets.CORTEX_KEY_PASSWORD }}
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Upload APK (build artifact — expires, requires GitHub login)
         uses: actions/upload-artifact@v4
         with:
-          name: cortex-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: cortex-release-apk
+          path: app/build/outputs/apk/release/app-release.apk
+
+      # Publishes the APK to a GitHub Release tagged "latest", overwriting
+      # the previous one each time. This is what gives you a permanent,
+      # shareable download link that works for anyone — no GitHub login,
+      # no digging through the Actions tab, and the URL never changes even
+      # as the app updates:
+      #
+      #   https://github.com/<your-username>/CortexApp/releases/latest/download/app-release.apk
+      #
+      - name: Publish to "latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Cortex (latest build)
+          body: Automatically built from the latest push to main. Direct download link below.
+          make_latest: true
+          files: app/build/outputs/apk/release/app-release.apk
