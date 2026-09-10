@@ -2,7 +2,10 @@ package com.cortex.app
 
 import android.annotation.SuppressLint
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -127,13 +130,49 @@ class MainActivity : AppCompatActivity() {
         // big comment at the top of this class for why this exists at all.
         webView.addJavascriptInterface(AndroidDownloadBridge(this), "AndroidDownload")
 
+        loadAppropriateUrl(intent)
+    }
+
+    // The activity is declared launchMode="singleTask" (see
+    // AndroidManifest.xml) so that repeated taps on the Quick Settings tile
+    // bring the same window forward instead of stacking up new ones. The
+    // tradeoff: Android delivers a SECOND tap's intent through
+    // onNewIntent() instead of a fresh onCreate() — so without this
+    // override, tapping the tile while the app's already open would
+    // silently do nothing at all (the EXTRA_OPEN_FILES extra just never
+    // gets read). This makes each tap re-evaluate where to go, exactly
+    // like a cold launch would.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        loadAppropriateUrl(intent)
+    }
+
+    private fun loadAppropriateUrl(intent: Intent?) {
         val jumpToFiles = intent?.getBooleanExtra(EXTRA_OPEN_FILES, false) ?: false
-        val url = if (jumpToFiles) "$BASE_URL/files.html" else "$BASE_URL/dashboard.html"
+        val url = when {
+            // No connection at all right now — dashboard.html and files.html
+            // were never cached by the site's service worker (only
+            // reader.html is, deliberately, since that's the one page that
+            // needs no live account or server data to actually work). Send
+            // straight there instead of showing a dead network-error page
+            // for a URL that has no offline fallback at all.
+            !isNetworkAvailable() -> "$BASE_URL/reader.html"
+            jumpToFiles -> "$BASE_URL/files.html"
+            else -> "$BASE_URL/dashboard.html"
+        }
         webView.loadUrl(url)
     }
 
     override fun onBackPressed() {
         if (webView.canGoBack()) webView.goBack() else super.onBackPressed()
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val capabilities = cm.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     companion object {

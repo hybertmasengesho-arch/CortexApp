@@ -2,6 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Lets MainActivity check whether there's a real connection at
+         launch, so it can send you straight to the offline-capable Reader
+         page instead of a dead network-error screen when there isn't. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Only needed on Android 9 and below — MediaStore.Downloads (used on
          Android 10+, no permission required) didn't exist yet, so the
