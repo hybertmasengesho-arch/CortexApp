@@ -1,0 +1,7 @@
+<resources>
+    <style name="Theme.Cortex" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#0E9E68</item>
+        <item name="colorPrimaryDark">#07080B</item>
+        <item name="android:windowBackground">#07080B</item>
+    </style>
+</resources>
