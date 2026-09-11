@@ -59,6 +59,29 @@ jobs:
           CORTEX_KEY_PASSWORD: ${{ secrets.CORTEX_KEY_PASSWORD }}
         run: gradle assembleRelease --no-daemon --stacktrace
 
+      # Android names the output differently depending on whether it's
+      # actually signed: app-release.apk when signed, but
+      # app-release-unsigned.apk when the 4 CORTEX_* secrets above aren't
+      # set yet. Without this step, an unsigned build would silently
+      # produce a release with NO apk attached at all (only the auto-added
+      # source code zips) — exactly what happened before this was added:
+      # the workflow succeeded, but release-publish had no file matching
+      # the hardcoded "app-release.apk" path to actually attach.
+      - name: Normalize APK filename
+        shell: bash
+        run: |
+          cd app/build/outputs/apk/release
+          ls -la
+          if [ -f app-release.apk ]; then
+            echo "Already signed and correctly named."
+          elif [ -f app-release-unsigned.apk ]; then
+            echo "Unsigned build — renaming so the download link stays the same either way."
+            mv app-release-unsigned.apk app-release.apk
+          else
+            echo "::error::No release APK found at all — build may have failed silently."
+            exit 1
+          fi
+
       - name: Upload APK (build artifact — expires, requires GitHub login)
         uses: actions/upload-artifact@v4
         with:
