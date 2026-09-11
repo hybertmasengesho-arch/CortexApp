@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Cortex</string>
+    <string name="tile_label">Cortex Files</string>
+</resources>
